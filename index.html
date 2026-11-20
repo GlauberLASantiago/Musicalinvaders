@@ -152,6 +152,40 @@
         .game-tools button { min-height:44px; background:var(--purple); color:var(--cyan); border:1px solid var(--cyan); border-radius:6px; padding:.5rem .7rem; font:inherit; font-size:.7rem; cursor:pointer; }
         #target { font:600 1rem/1.5 system-ui,sans-serif; color:var(--yellow); flex:1 1 12rem; }
         #modal p { font-family:system-ui,sans-serif; }
+        .stage { position: relative; width: 100%; }
+        .stage canvas { display: block; }
+        .desktop-intro, .intro-notes { display: none; }
+        @media (min-width: 48rem) {
+            #game-container { max-width: min(800px, max(540px, calc((100vh - 10rem) * 1.3333))); }
+            .stage { container-type: inline-size; }
+            .game-tools button:disabled { opacity: .45; cursor: default; }
+            #modal {
+                position: absolute;
+                inset: 3px;
+                width: auto;
+                height: auto;
+                border-radius: 7px;
+                padding: 5%;
+                gap: clamp(.75rem, 2cqw, 1.25rem);
+                background: radial-gradient(ellipse at top, #2a1943 0%, #100c21 54%, #070612 100%);
+            }
+            #modal h1 {
+                margin: 0;
+                max-width: 100%;
+                font-size: clamp(1.2rem, 4.3cqw, 2.2rem);
+                line-height: 1.4;
+                text-shadow: 2px 3px #a82189;
+            }
+            #modal p { margin: 0; font-size: clamp(1rem, 2.4cqw, 1.2rem); line-height: 1.5; color: #eee9ff; }
+            #modal button { font-size: clamp(.85rem, 2.1cqw, 1.05rem); margin-top: .4rem; }
+            .desktop-intro { display: block; }
+            .mobile-intro { display: none; }
+            .intro-keys { display: flex; gap: .5rem 1rem; flex-wrap: wrap; justify-content: center; margin-top: 1rem; color: #bcb3ce; font-size: .95rem; }
+            .intro-keys kbd { font: 600 .9rem system-ui,sans-serif; color: var(--cyan); }
+            #modal:has(.desktop-intro) .intro-notes {
+                display: block; font: 2.7rem/1 Georgia,serif; letter-spacing: .18em; color: var(--cyan);
+            }
+        }
     </style>
     <meta property="og:image" content="https://glauberlasantiago.github.io/Musicalinvaders/capa-compartilhamento.jpg">
     <meta property="og:image:width" content="1200">
@@ -167,7 +201,20 @@
             <div>Recorde <span id="best">0</span></div>
             <div>Vidas <span id="lives">3</span></div>
         </div>
-        <canvas id="gameCanvas" width="640" height="480" tabindex="-1" aria-label="Tabuleiro de Invasores Musicais"></canvas>
+        <div class="stage">
+            <canvas id="gameCanvas" width="640" height="480" tabindex="-1" aria-label="Tabuleiro de Invasores Musicais"></canvas>
+            <div id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-text">
+                <span class="intro-notes" aria-hidden="true">♩ ♪ ♫</span>
+                <h1 id="modal-title">Invasores Musicais</h1>
+                <p id="modal-text">
+                    <span class="desktop-intro">Defenda a nave. Acerte a figura musical indicada para ganhar bônus em sequência.
+                        <span class="intro-keys"><span><kbd>← →</kbd> ou <kbd>A / D</kbd> mover</span><span><kbd>Espaço</kbd> atirar</span><span><kbd>P</kbd> pausar</span></span>
+                    </span>
+                    <span class="mobile-intro">Defenda a nave e acerte a figura pedida para ganhar bônus em sequência. Use as setas ou A/D para mover, Espaço para atirar e P para pausar. No celular, use os botões de toque.</span>
+                </p>
+                <button id="start-button">Iniciar Jogo</button>
+            </div>
+        </div>
         <div class="game-tools">
             <p id="target" aria-live="polite"></p>
             <button type="button" id="pause" disabled>Pausar</button>
@@ -178,11 +225,6 @@
             <button type="button" id="mobile-fire" class="mobile-btn" aria-label="Atirar">●</button>
             <button type="button" id="move-right" class="mobile-btn" aria-label="Mover à direita">▶</button>
         </div>
-    </div>
-    <div id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-text">
-        <h1 id="modal-title">Invasores Musicais</h1>
-        <p id="modal-text">Defenda a nave e acerte a figura pedida para ganhar bônus em sequência. Use as setas ou A/D para mover, Espaço para atirar e P para pausar. No celular, use os botões de toque.</p>
-        <button id="start-button">Iniciar Jogo</button>
     </div>
 
     <script>
