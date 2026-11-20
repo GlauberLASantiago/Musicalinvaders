@@ -27,7 +27,6 @@
             min-height: 100vh;
             margin: 0;
             font-family: 'Press Start 2P', cursive;
-            overflow: hidden;
             padding: 1rem;
             box-sizing: border-box;
         }
@@ -47,12 +46,15 @@
             padding: 10px 0;
             margin-bottom: 10px;
             box-sizing: border-box;
-            font-size: clamp(1rem, 2.5vw, 1.5rem);
+            flex-wrap: wrap;
+            gap: .65rem 1rem;
+            font-size: clamp(.7rem, 2vw, 1rem);
             color: var(--yellow);
             text-shadow: 2px 2px 0 var(--magenta);
         }
 
         canvas {
+            box-sizing: border-box;
             background-color: #000;
             border: 3px solid var(--cyan);
             border-radius: 10px;
@@ -65,7 +67,7 @@
         
         #modal {
             display: flex;
-            position: absolute;
+            position: fixed;
             top: 0;
             left: 0;
             width: 100%;
@@ -76,6 +78,8 @@
             align-items: center;
             text-align: center;
             z-index: 10;
+            box-sizing: border-box;
+            padding: 1rem;
         }
         
         #modal h1 {
@@ -88,6 +92,8 @@
              font-size: clamp(1rem, 3vw, 1.5rem);
              margin-top: 0;
              color: var(--cyan);
+             max-width: 50ch;
+             line-height: 1.7;
          }
 
         #modal button {
@@ -130,6 +136,7 @@
             justify-content: center;
             align-items: center;
             user-select: none;
+            touch-action: none;
             box-shadow: 0 5px 0 var(--dark-purple);
         }
         
@@ -141,6 +148,10 @@
            color: var(--magenta);
            box-shadow: 0 5px 0 var(--dark-purple);
         }
+        .game-tools { display:flex; flex-wrap:wrap; width:100%; align-items:center; gap:.5rem; margin:.7rem 0; }
+        .game-tools button { min-height:44px; background:var(--purple); color:var(--cyan); border:1px solid var(--cyan); border-radius:6px; padding:.5rem .7rem; font:inherit; font-size:.7rem; cursor:pointer; }
+        #target { font:600 1rem/1.5 system-ui,sans-serif; color:var(--yellow); flex:1 1 12rem; }
+        #modal p { font-family:system-ui,sans-serif; }
     </style>
     <meta property="og:image" content="https://glauberlasantiago.github.io/Musicalinvaders/capa-compartilhamento.jpg">
     <meta property="og:image:width" content="1200">
@@ -152,19 +163,25 @@
 
     <div id="game-container">
         <div id="info-bar">
-            <div>Score: <span id="score">0</span></div>
-            <div>Lives: <span id="lives">3</span></div>
+            <div>Pontos <span id="score">0</span></div>
+            <div>Recorde <span id="best">0</span></div>
+            <div>Vidas <span id="lives">3</span></div>
         </div>
-        <canvas id="gameCanvas"></canvas>
+        <canvas id="gameCanvas" width="640" height="480" tabindex="-1" aria-label="Tabuleiro de Invasores Musicais"></canvas>
+        <div class="game-tools">
+            <p id="target" aria-live="polite"></p>
+            <button type="button" id="pause" disabled>Pausar</button>
+            <button type="button" id="sound" aria-pressed="false">Silenciar</button>
+        </div>
         <div id="mobile-controls">
-            <div id="move-left" class="mobile-btn">◀</div>
-            <div id="mobile-fire" class="mobile-btn">FIRE</div>
-            <div id="move-right" class="mobile-btn">▶</div>
+            <button type="button" id="move-left" class="mobile-btn" aria-label="Mover à esquerda">◀</button>
+            <button type="button" id="mobile-fire" class="mobile-btn" aria-label="Atirar">●</button>
+            <button type="button" id="move-right" class="mobile-btn" aria-label="Mover à direita">▶</button>
         </div>
     </div>
-    <div id="modal">
+    <div id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-text">
         <h1 id="modal-title">Invasores Musicais</h1>
-        <p id="modal-text">Use as setas para mover e Espaço para atirar.</p>
+        <p id="modal-text">Defenda a nave e acerte a figura pedida para ganhar bônus em sequência. Use as setas ou A/D para mover, Espaço para atirar e P para pausar. No celular, use os botões de toque.</p>
         <button id="start-button">Iniciar Jogo</button>
     </div>
 
@@ -179,6 +196,10 @@
             const modalTitle = document.getElementById('modal-title');
             const modalText = document.getElementById('modal-text');
             const startButton = document.getElementById('start-button');
+            const pauseButton = document.getElementById('pause');
+            const soundButton = document.getElementById('sound');
+            const targetEl = document.getElementById('target');
+            const bestEl = document.getElementById('best');
 
             // --- CONFIGURAÇÃO DE ÁUDIO (TONE.JS) ---
             let synths = {};
@@ -191,6 +212,7 @@
                     synths.playerHit = new Tone.Synth({ oscillator: { type: 'sawtooth' }, envelope: { attack: 0.01, decay: 0.5, sustain: 0, release: 0.5 } }).toDestination();
                     synths.bunkerHit = new Tone.MembraneSynth({ pitchDecay: 0.1, octaves: 2, envelope: { attack: 0.001, decay: 0.3, sustain: 0.01, release: 0.1 } }).toDestination();
                     synths.levelUp = new Tone.Synth().toDestination();
+                    synths.bonus = new Tone.Synth({ volume: -10 }).toDestination();
                     synths.gameOver = new Tone.Synth().toDestination();
                     
                     // Sequência rítmica para o movimento dos invasores
@@ -240,14 +262,22 @@
             let bunkers = []; 
             const keys = { right: false, left: false };
             const MAX_BUNKER_HEALTH = 15; // --- NOVO: Constante para vida máxima
+            const figures = [
+                ['semibreve', 'Semibreve', 'C4'], ['minima', 'Mínima', 'D4'],
+                ['seminima', 'Semínima', 'E4'], ['colcheia', 'Colcheia', 'G4'],
+                ['semicolcheia', 'Semicolcheia', 'A4']
+            ];
+            let target, streak, lastFrame, elapsed, best = 0;
+            try { best = Number(localStorage.getItem('musical-invaders-best')) || 0; } catch {}
+            bestEl.textContent = best;
 
             // --- FUNÇÕES DE CONTROLE DE JOGO ---
             function startNewGame() {
-                resizeCanvas();
                 score = 0;
                 lives = 3;
                 level = 1;
                 invaderSpeed = 0.5;
+                player.color = '#00FFFF';
                 if (toneReady) {
                     Tone.Transport.bpm.value = 100;
                     const now = Tone.now();
@@ -262,24 +292,57 @@
                 playerProjectile = null;
                 invaderProjectiles = [];
                 createInvaders();
+                invaderDirection = 1;
+                streak = 0;
+                target = (level - 1) % figures.length;
                 createBunkers();
                 updateHUD();
                 
                 modal.style.display = 'none';
+                canvas.focus({ preventScroll: true });
                 gameActive = true;
                 gameState = 'playing';
+                pauseButton.disabled = false;
+                pauseButton.textContent = 'Pausar';
 
                 if (animationFrameId) cancelAnimationFrame(animationFrameId);
                 if (invaderFireInterval) clearInterval(invaderFireInterval);
                 
                 if (toneReady) Tone.Transport.start();
-                invaderFireInterval = setInterval(invaderShoot, 1000 - (level * 50));
-                gameLoop();
+                resumeLoop();
+            }
+
+            function resumeLoop() {
+                lastFrame = null;
+                elapsed = 0;
+                invaderFireInterval = setInterval(invaderShoot, Math.max(300, 1050 - level * 50));
+                animationFrameId = requestAnimationFrame(gameLoop);
+            }
+
+            function togglePause() {
+                if (gameState === 'playing') {
+                    gameState = 'paused';
+                    gameActive = false;
+                    keys.left = keys.right = false;
+                    clearInterval(invaderFireInterval);
+                    cancelAnimationFrame(animationFrameId);
+                    if (toneReady) Tone.Transport.pause();
+                    pauseButton.textContent = 'Continuar';
+                } else if (gameState === 'paused') {
+                    gameActive = true;
+                    gameState = 'playing';
+                    if (toneReady) Tone.Transport.start();
+                    pauseButton.textContent = 'Pausar';
+                    resumeLoop();
+                    canvas.focus({ preventScroll: true });
+                }
             }
             
             function levelUp() {
                  gameActive = false;
                  gameState = 'levelComplete';
+                 clearInterval(invaderFireInterval);
+                 pauseButton.disabled = true;
                  if (toneReady) {
                      Tone.Transport.stop();
                      const now = Tone.now();
@@ -292,14 +355,16 @@
                  invaderSpeed += 0.3;
                  if (toneReady) Tone.Transport.bpm.value += 20;
                  modalTitle.textContent = "NÍVEL COMPLETO!";
-                 modalText.innerHTML = `Score: ${score}<br>Prepare-se para o nível ${level}`;
+                 modalText.textContent = `Pontuação: ${score}. Prepare-se para o nível ${level}.`;
                  startButton.textContent = "Próximo Nível";
                  modal.style.display = 'flex';
+                 startButton.focus();
              }
             
             function gameOver(message) {
                  gameActive = false;
                  gameState = 'gameOver';
+                 pauseButton.disabled = true;
                  if (toneReady) {
                      Tone.Transport.stop();
                      const now = Tone.now();
@@ -311,15 +376,21 @@
                  if (invaderFireInterval) clearInterval(invaderFireInterval);
                  modal.style.display = 'flex';
                  modalTitle.textContent = message;
-                 modalText.textContent = `Score final: ${score}`;
+                 modalText.textContent = `Pontuação final: ${score}. Recorde: ${best}.`;
                  startButton.textContent = "Jogar Novamente";
+                 startButton.focus();
             }
 
-            function gameLoop() {
+            function gameLoop(now) {
                 if (!gameActive) return;
-                update();
+                elapsed += lastFrame === null ? 0 : Math.min(now - lastFrame, 80);
+                lastFrame = now;
+                while (elapsed >= 1000 / 60 && gameActive) {
+                    update();
+                    elapsed -= 1000 / 60;
+                }
                 draw();
-                animationFrameId = requestAnimationFrame(gameLoop);
+                if (gameActive) animationFrameId = requestAnimationFrame(gameLoop);
             }
 
             // --- LÓGICA DE CRIAÇÃO DE ELEMENTOS ---
@@ -334,6 +405,7 @@
                         invaders.push({
                             x: startX + col * (invader.width + 15),
                             y: startY + row * (invader.height + 20),
+                            figure: row,
                             color: invaderColors[row % invaderColors.length]
                         });
                     }
@@ -365,8 +437,8 @@
             
             // --- LÓGICA DE ATUALIZAÇÃO ---
             function update() {
-                if (keys.right && player.x < canvas.width - player.width) player.x += player.speed;
-                if (keys.left && player.x > 0) player.x -= player.speed;
+                player.x = Math.max(0, Math.min(canvas.width - player.width,
+                    player.x + (Number(keys.right) - Number(keys.left)) * player.speed));
 
                 if (playerProjectile) {
                     playerProjectile.y -= playerProjectile.speed;
@@ -381,8 +453,11 @@
                 invaders.forEach(inv => {
                     inv.x += invaderSpeed * invaderDirection;
                     if (inv.x <= 0 || inv.x + invader.width >= canvas.width) hitWall = true;
-                    if (inv.y + invader.height >= player.y - 10) gameOver("Os invasores chegaram!");
                 });
+                if (invaders.some(inv => inv.y + invader.height >= player.y - 10)) {
+                    gameOver("Os invasores chegaram!");
+                    return;
+                }
                 if (hitWall) {
                     invaderDirection *= -1;
                     invaders.forEach(inv => { inv.y += invaderDrop; });
@@ -413,8 +488,21 @@
                 if (playerProjectile) {
                     for (let i = invaders.length - 1; i >= 0; i--) {
                         if (checkCollision(playerProjectile, { ...invaders[i], ...invader })) {
-                            if (toneReady) synths.invaderDestroyed.triggerAttack();
+                            const hit = invaders[i].figure;
+                            if (hit === target) {
+                                streak++;
+                                score += Math.min(streak, 5) * 10;
+                                if (toneReady) synths.bonus.triggerAttackRelease(figures[hit][2], "16n");
+                            } else {
+                                streak = 0;
+                                if (toneReady) synths.invaderDestroyed.triggerAttack();
+                            }
                             invaders.splice(i, 1);
+                            if (invaders.length && !invaders.some(inv => inv.figure === target)) {
+                                do { target = (target + 1) % figures.length; }
+                                while (!invaders.some(inv => inv.figure === target));
+                                streak = 0;
+                            }
                             playerProjectile = null;
                             score += 10;
                             updateHUD();
@@ -453,6 +541,7 @@
             function playerHit() {
                 if (toneReady) synths.playerHit.triggerAttackRelease("G2", "8n");
                 lives--;
+                streak = 0;
                 updateHUD();
                 if (lives <= 0) gameOver("Fim de Jogo!");
                 else {
@@ -465,6 +554,12 @@
             function updateHUD() {
                 scoreEl.textContent = score;
                 livesEl.textContent = lives;
+                if (score > best) {
+                    best = score;
+                    bestEl.textContent = best;
+                    try { localStorage.setItem('musical-invaders-best', String(best)); } catch {}
+                }
+                targetEl.textContent = `Nível ${level} · Alvo bônus: ${figures[target][1]} · Sequência: ${streak}`;
             }
             
             // --- FUNÇÕES DE DESENHO ---
@@ -504,15 +599,9 @@
             }
 
             function drawInvader(inv) {
-                const i = { ...inv, ...invader };
-                ctx.fillStyle = i.color;
                 ctx.shadowBlur = 15;
-                ctx.shadowColor = i.color;
-                ctx.fillRect(i.x, i.y, i.width, i.height);
-                ctx.fillStyle = "#000";
-                ctx.fillRect(i.x + i.width * 0.2, i.y + i.height * 0.3, i.width * 0.2, i.height * 0.2);
-                ctx.fillRect(i.x + i.width * 0.6, i.y + i.height * 0.3, i.width * 0.2, i.height * 0.2);
-                ctx.shadowBlur = 0;
+                ctx.shadowColor = inv.color;
+                drawFigure({ ...inv, ...invader, type: figures[inv.figure][0] }, inv.color);
             }
 
             function drawBunkers() {
@@ -520,11 +609,14 @@
                     // --- MUDANÇA: Cor e brilho mais fortes ---
                     const healthPercentage = bunker.health / MAX_BUNKER_HEALTH;
                     const bunkerColor = `rgba(70, 34, 85, ${0.5 + healthPercentage * 0.5})`; // Cor roxa fica mais transparente
-                    ctx.fillStyle = bunkerColor;
-                    ctx.strokeStyle = bunkerColor;
                     ctx.shadowBlur = 15;
                     ctx.shadowColor = `rgba(255, 0, 255, ${healthPercentage})`; // Brilho magenta diminui com o dano
-                    
+                    drawFigure(bunker, bunkerColor);
+                });
+            }
+
+            function drawFigure(bunker, color) {
+                    ctx.fillStyle = ctx.strokeStyle = color;
                     ctx.lineWidth = bunker.width / 12;
                     
                     const headX = bunker.x + bunker.width / 2;
@@ -587,13 +679,15 @@
                             break;
                     }
                     ctx.shadowBlur = 0;
-                });
             }
             
             // --- EVENT LISTENERS E CONTROLES ---
             function handleKeyDown(e) {
+                if (e.code === 'KeyP' && !e.repeat) togglePause();
+                if (!gameActive || (e.code === 'Space' && e.target.closest?.('button'))) return;
                 if (e.code === 'ArrowRight' || e.key === 'd') keys.right = true;
                 if (e.code === 'ArrowLeft' || e.key === 'a') keys.left = true;
+                if (e.code.startsWith('Arrow')) e.preventDefault();
                 if (e.code === 'Space') { e.preventDefault(); shoot(); }
             }
             
@@ -617,25 +711,20 @@
                     const leftBtn = document.getElementById('move-left');
                     const rightBtn = document.getElementById('move-right');
                     const fireBtn = document.getElementById('mobile-fire');
-                    leftBtn.addEventListener('touchstart', (e) => { e.preventDefault(); keys.left = true; });
-                    leftBtn.addEventListener('touchend', (e) => { e.preventDefault(); keys.left = false; });
-                    rightBtn.addEventListener('touchstart', (e) => { e.preventDefault(); keys.right = true; });
-                    rightBtn.addEventListener('touchend', (e) => { e.preventDefault(); keys.right = false; });
-                    fireBtn.addEventListener('touchstart', (e) => { e.preventDefault(); shoot(); });
+                    for (const [button, direction] of [[leftBtn, 'left'], [rightBtn, 'right']]) {
+                        button.addEventListener('pointerdown', e => {
+                            if (!gameActive) return;
+                            button.setPointerCapture(e.pointerId);
+                            keys[direction] = true;
+                        });
+                        for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+                            button.addEventListener(event, () => { keys[direction] = false; });
+                        }
+                    }
+                    fireBtn.addEventListener('click', shoot);
                 }
             }
             
-            function resizeCanvas() {
-                const containerWidth = canvas.parentElement.clientWidth;
-                canvas.width = containerWidth;
-                canvas.height = containerWidth * (3 / 4);
-                player.y = canvas.height - player.height - 10;
-                if(gameActive || gameState === 'startScreen') {
-                    createBunkers();
-                    draw();
-                }
-            }
-
             // --- INICIALIZAÇÃO ---
             startButton.addEventListener('click', () => {
                 if (toneReady && Tone.context.state !== 'running') {
@@ -649,11 +738,24 @@
                 }
             });
 
-            window.addEventListener('resize', resizeCanvas);
+            pauseButton.addEventListener('click', togglePause);
+            soundButton.addEventListener('click', () => {
+                const muted = soundButton.getAttribute('aria-pressed') !== 'true';
+                soundButton.setAttribute('aria-pressed', String(muted));
+                soundButton.textContent = muted ? 'Ativar som' : 'Silenciar';
+                if (toneReady) Tone.Destination.mute = muted;
+            });
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden && gameActive) togglePause();
+            });
+            window.addEventListener('blur', () => { keys.left = keys.right = false; });
             document.addEventListener('keydown', handleKeyDown);
             document.addEventListener('keyup', handleKeyUp);
             setupMobileControls();
-            resizeCanvas(); 
+            player.y = canvas.height - player.height - 10;
+            createBunkers();
+            draw();
+            startButton.focus();
         };
     </script>
 
