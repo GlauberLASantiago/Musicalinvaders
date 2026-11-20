@@ -12,6 +12,7 @@ O jogo é construído inteiramente com **HTML5 Canvas** e **JavaScript** puro, s
 * **Pontuação e Vidas:** Sistema de pontuação e vidas para acompanhar seu progresso.
 * **Alvo musical:** Acerte a figura indicada para ganhar bônus crescente a cada acerto consecutivo. Um acerto em outra figura ou a perda de uma vida encerra a sequência.
 * **Recorde local:** A maior pontuação fica salva no navegador.
+* **Pausas musicais:** Cada invasor lança a pausa correspondente à sua figura. A pausa de semibreve fica pendurada na linha e a de mínima repousa sobre ela.
 * **Pausa e som:** Pause com P ou pelo botão e silencie a trilha e os efeitos quando quiser.
 * **Controles Responsivos:** Jogue no desktop com o teclado (`Setas` para mover, `Espaço` para atirar) ou em dispositivos móveis com controles de toque.
 * **Efeitos Sonoros:** Sons gerados em tempo real para tiros e colisões.

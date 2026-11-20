@@ -267,6 +267,14 @@
                 ['seminima', 'Semínima', 'E4'], ['colcheia', 'Colcheia', 'G4'],
                 ['semicolcheia', 'Semicolcheia', 'A4']
             ];
+            // Contornos em coordenadas do tabuleiro, independentes das fontes do aparelho.
+            const restShapes = {
+                semibreve: { width: 26, height: 9, path: new Path2D('M0 0 H26 V2 H20 V9 H6 V2 H0 Z') },
+                minima: { width: 26, height: 9, path: new Path2D('M0 7 H6 V0 H20 V7 H26 V9 H0 Z') },
+                seminima: { width: 15, height: 28, path: new Path2D('M4 0 L14 8 Q8 13 9 14 L15 21 Q7 17 5 20 Q3 23 9 28 Q0 25 0 20 Q0 15 8 16 L2 10 Q8 7 7 6 Z') },
+                colcheia: { width: 15, height: 22, path: new Path2D('M15 0 L8 22 H5 L11 6 Q7 9 3 8 C-1 7 -1 1 3 1 Q7 0 7 5 Q11 6 14 0 Z') },
+                semicolcheia: { width: 18, height: 29, path: new Path2D('M18 0 L10 29 H7 L12 15 Q7 19 3 18 C-1 17 -1 11 3 11 Q7 10 7 15 Q10 16 13 11 L15 5 Q11 9 7 8 C3 7 3 1 7 1 Q11 0 11 5 Q14 5 17 0 Z') }
+            };
             let target, streak, lastFrame, elapsed, best = 0;
             try { best = Number(localStorage.getItem('musical-invaders-best')) || 0; } catch {}
             bestEl.textContent = best;
@@ -472,10 +480,12 @@
             function invaderShoot() {
                 if (!gameActive || invaders.length === 0) return;
                 const shootingInvader = invaders[Math.floor(Math.random() * invaders.length)];
+                const shape = restShapes[figures[shootingInvader.figure][0]];
                 invaderProjectiles.push({
-                    x: shootingInvader.x + invader.width / 2 - projectile.width / 2,
+                    x: shootingInvader.x + (invader.width - shape.width) / 2,
                     y: shootingInvader.y + invader.height,
-                    width: 4, height: 12, speed: 5, color: '#F7F48B'
+                    width: shape.width, height: shape.height, speed: 5,
+                    path: shape.path, color: shootingInvader.color
                 });
             }
             
@@ -574,11 +584,13 @@
                     ctx.shadowBlur = 0;
                 }
                 invaderProjectiles.forEach(p => {
+                    ctx.save();
+                    ctx.translate(p.x, p.y);
                     ctx.fillStyle = p.color;
-                    ctx.shadowBlur = 10;
+                    ctx.shadowBlur = 3;
                     ctx.shadowColor = p.color;
-                    ctx.fillRect(p.x, p.y, p.width, p.height);
-                    ctx.shadowBlur = 0;
+                    ctx.fill(p.path);
+                    ctx.restore();
                 });
                 invaders.forEach(inv => drawInvader(inv));
                 drawBunkers();
